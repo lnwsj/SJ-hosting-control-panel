@@ -132,6 +132,91 @@ docker-compose up -d --build panel
 | DB_USER | root | Database user |
 | DB_PASSWORD | SjHosting2025! | Database password |
 
+## ✅ Completed Phases
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Foundation (Login, Dashboard) | ✅ |
+| 2 | Domain Management | ✅ |
+| 3 | Database Management | ✅ |
+| 4 | File Manager | ✅ |
+| 5 | SSL & Security (Certbot) | ✅ |
+| 6 | Polish & Deploy | ✅ |
+| 7 | Email Management (Mailserver + Roundcube) | ✅ |
+| 8 | Backup System (tar.gz + mysqldump) | ✅ |
+| 9 | DNS Management (Cloudflare API) | ✅ |
+
+## 🗺️ Roadmap (Phase 10-19)
+
+| Phase | Feature | Description |
+|-------|---------|-------------|
+| 10 | **Cron Jobs** | Create/manage scheduled tasks via UI |
+| 11 | **Firewall UI** | UFW rules, Block/Allow IPs |
+| 12 | **Fail2Ban** | View banned IPs, Unban, Protection settings |
+| 13 | **Log Viewer** | Real-time Access/Error logs |
+| 14 | **Resource Monitoring** | CPU/RAM/Network graphs with history |
+| 15 | **Multi-User** | User management with Admin/Reseller/User roles |
+| 16 | **User Quotas** | Disk, Bandwidth, Database limits per user |
+| 17 | **Billing Module** | Hosting packages, Invoices, Payment gateway |
+| 18 | **One-Click Apps** | Install WordPress, Laravel, Node.js with one click |
+| 19 | **API & CLI** | REST API for automation + Command Line Tool |
+
+### Phase Details
+
+#### Phase 10: Cron Jobs
+- UI to create/edit/delete cron jobs
+- View cron job history and logs
+- Pre-built templates (backup daily, cleanup weekly)
+
+#### Phase 11: Firewall UI
+- Manage UFW rules via web interface
+- Quick allow/block IP addresses
+- Port management (open/close)
+
+#### Phase 12: Fail2Ban Integration
+- View currently banned IPs
+- Manual unban functionality
+- Configure jail settings (SSH, Nginx, etc.)
+
+#### Phase 13: Log Viewer
+- Real-time access.log and error.log viewing
+- Filter by date, IP, status code
+- Log rotation settings
+
+#### Phase 14: Resource Monitoring
+- CPU/RAM/Disk usage graphs over time
+- Network bandwidth monitoring
+- Alert thresholds (email when disk > 90%)
+
+#### Phase 15: Multi-User System
+- Create user accounts with different roles
+- Admin: Full access
+- Reseller: Create sub-users and domains
+- User: Manage own domains only
+
+#### Phase 16: User Quotas
+- Set disk space limit per user
+- Set bandwidth limit per month
+- Limit number of domains, databases, emails
+
+#### Phase 17: Billing Module
+- Create hosting packages (Basic, Pro, Enterprise)
+- Generate invoices automatically
+- Integrate Stripe/PayPal for payments
+- Suspend accounts on overdue
+
+#### Phase 18: One-Click Apps
+- WordPress auto-install with database
+- Laravel project scaffold
+- Node.js app template with PM2
+- Static site generators
+
+#### Phase 19: API & CLI
+- REST API with JWT authentication
+- Create domains, databases via API
+- CLI tool for server management
+- Webhook notifications
+
 ## 🤝 Contributing
 
 1. Fork this repository
