@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - SJ Panel{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <h1 class="page-title"><i class="bi bi-cloud-arrow-down me-2"></i> Backups</h1>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#backupWebsiteModal">
+            <i class="bi bi-folder-plus me-2"></i> Backup Website
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#backupDatabaseModal">
+            <i class="bi bi-database-add me-2"></i> Backup Database
+        </button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-archive me-2"></i> Backup Files
+            </div>
+            <div class="card-body p-0">
+                {% if backups %}
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Filename</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                        <tr>
+                            <td>
+                                <i class="bi bi-{{ 'folder-fill text-warning' if backup.type == 'website' else 'database-fill text-primary' }} me-2"></i>
+                                <strong>{{ backup.filename }}</strong>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if backup.type == 'website' else 'info' }}">
+                                    {{ backup.type }}
+                                </span>
+                            </td>
+                            <td>{{ backup.size }}</td>
+                            <td><small class="text-muted">{{ backup.created }}</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('download_backup', filename=backup.filename) }}" class="btn btn-outline-primary" title="Download">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <form action="{{ url_for('restore_backup', filename=backup.filename) }}" method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Restore {{ backup.filename }}? ข้อมูลปัจจุบันจะถูกเขียนทับ');">
+                                        <button type="submit" class="btn btn-outline-success" title="Restore">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('delete_backup', filename=backup.filename) }}" method="POST" style="display:inline;"
+                                          onsubmit="return confirm('ลบ {{ backup.filename }}?');">
+                                        <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-archive text-muted" style="font-size: 4rem;"></i>
+                    <h5 class="mt-3 text-muted">ยังไม่มี Backup</h5>
+                    <p class="text-muted">คลิกปุ่มด้านบนเพื่อสร้าง Backup</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-info-circle me-2"></i> Backup Info
+            </div>
+            <div class="card-body">
+                <p class="mb-2"><strong>Website Backup:</strong></p>
+                <p class="text-muted small mb-3">สำรองไฟล์ทั้งหมดใน /var/www/domain/ เป็นไฟล์ .tar.gz</p>
+                
+                <p class="mb-2"><strong>Database Backup:</strong></p>
+                <p class="text-muted small mb-3">ใช้ mysqldump สร้างไฟล์ .sql</p>
+                
+                <p class="mb-2"><strong>Restore:</strong></p>
+                <p class="text-muted small mb-0">กดปุ่ม ↺ เพื่อเขียนทับข้อมูลปัจจุบัน</p>
+            </div>
+        </div>
+        
+        <div class="card mt-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-exclamation-triangle me-2"></i> คำเตือน
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-0">
+                    การ Restore จะ<strong>เขียนทับ</strong>ข้อมูลปัจจุบัน กรุณาสำรองข้อมูลก่อน Restore
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backup Website Modal -->
+<div class="modal fade" id="backupWebsiteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i> Backup Website</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('create_website_backup') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select Domain</label>
+                        <select class="form-select" name="domain_name" required>
+                            {% for domain in domains %}
+                            <option value="{{ domain.name }}">{{ domain.name }}</option>
+                            {% endfor %}
+                            {% if not domains %}
+                            <option value="" disabled selected>ไม่มีโดเมน</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" {% if not domains %}disabled{% endif %}>
+                        <i class="bi bi-download me-2"></i> Create Backup
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Backup Database Modal -->
+<div class="modal fade" id="backupDatabaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-database-add me-2"></i> Backup Database</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('create_database_backup') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select Database</label>
+                        <select class="form-select" name="db_name" required>
+                            {% for db in databases %}
+                            <option value="{{ db.name }}">{{ db.name }}</option>
+                            {% endfor %}
+                            {% if not databases %}
+                            <option value="" disabled selected>ไม่มี Database</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" {% if not databases %}disabled{% endif %}>
+                        <i class="bi bi-download me-2"></i> Create Backup
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

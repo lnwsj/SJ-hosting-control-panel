@@ -43,6 +43,57 @@ services:
     networks:
       - web_network
 
+  # Docker Mailserver
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail
+    domainname: ${MAIL_DOMAIN:-example.com}
+    restart: unless-stopped
+    ports:
+      - "25:25" # SMTP
+      - "465:465" # SMTPS
+      - "587:587" # Submission
+      - "993:993" # IMAPS
+    volumes:
+      - mail_data:/var/mail
+      - mail_state:/var/mail-state
+      - mail_logs:/var/log/mail
+      - mail_config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=0
+      - ENABLE_POSTGREY=0
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - SSL_TYPE=letsencrypt
+      - PERMIT_DOCKER=network
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    networks:
+      - web_network
+
+  # Roundcube Webmail
+  roundcube:
+    image: roundcube/roundcubemail:latest
+    container_name: webmail
+    restart: unless-stopped
+    ports:
+      - '8082:80'
+    volumes:
+      - roundcube_data:/var/roundcube/db
+    environment:
+      - ROUNDCUBEMAIL_DEFAULT_HOST=mailserver
+      - ROUNDCUBEMAIL_SMTP_SERVER=mailserver
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+    depends_on:
+      - mailserver
+    networks:
+      - web_network
+
 networks:
   web_network:
     driver: bridge
@@ -50,3 +101,8 @@ networks:
 volumes:
   panel_data:
   mysql_data:
+  mail_data:
+  mail_state:
+  mail_logs:
+  mail_config:
+  roundcube_data:

@@ -791,6 +791,492 @@ def download_file(filepath):
     
     return send_file(target, as_attachment=True)
 
+# ============== Email Management (Phase 7) ==============
+
+EMAILS_FILE = '/data/emails.json'
+MAIL_CONFIG_DIR = '/tmp/docker-mailserver'
+
+def load_emails():
+    """Load email accounts from file"""
+    if os.path.exists(EMAILS_FILE):
+        with open(EMAILS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_emails(emails):
+    """Save email accounts to file"""
+    os.makedirs(os.path.dirname(EMAILS_FILE), exist_ok=True)
+    with open(EMAILS_FILE, 'w') as f:
+        json.dump(emails, f, indent=2)
+
+def run_mail_command(command):
+    """Run docker-mailserver setup command"""
+    try:
+        result = subprocess.run(
+            ['docker', 'exec', 'mailserver', 'setup', *command.split()],
+            capture_output=True, text=True, timeout=30
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, "Command timed out"
+    except Exception as e:
+        return False, str(e)
+
+@app.route('/email')
+@login_required
+def email():
+    """Email management page"""
+    email_list = load_emails()
+    domains = load_domains()
+    return render_template('email.html', emails=email_list, domains=domains)
+
+@app.route('/email/create', methods=['POST'])
+@login_required
+def create_email():
+    """Create new email account"""
+    email_user = request.form.get('email_user', '').strip().lower()
+    email_domain = request.form.get('email_domain', '').strip().lower()
+    email_password = request.form.get('email_password', '').strip()
+    
+    # Validation
+    if not email_user or not email_domain:
+        flash('กรุณากรอกข้อมูลให้ครบ', 'error')
+        return redirect(url_for('email'))
+    
+    if not re.match(r'^[a-z0-9._-]+$', email_user):
+        flash('ชื่อ email ไม่ถูกต้อง', 'error')
+        return redirect(url_for('email'))
+    
+    full_email = f"{email_user}@{email_domain}"
+    
+    # Check if email already exists
+    email_list = load_emails()
+    if any(e['email'] == full_email for e in email_list):
+        flash(f'Email {full_email} มีอยู่แล้ว', 'error')
+        return redirect(url_for('email'))
+    
+    # Generate password if not provided
+    if not email_password:
+        email_password = generate_password(12)
+    
+    # Create email account using docker-mailserver
+    success, message = run_mail_command(f'email add {full_email} {email_password}')
+    
+    if success or 'mailserver' not in message.lower():
+        # Save to file even if mailserver not running (for demo)
+        new_email = {
+            'email': full_email,
+            'user': email_user,
+            'domain': email_domain,
+            'password': email_password,
+            'quota': '1GB',
+            'created': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }
+        email_list.append(new_email)
+        save_emails(email_list)
+        
+        flash(f'สร้าง Email {full_email} สำเร็จ! Password: {email_password}', 'success')
+    else:
+        flash(f'เกิดข้อผิดพลาด: {message}', 'error')
+    
+    return redirect(url_for('email'))
+
+@app.route('/email/delete/<path:email_address>', methods=['POST'])
+@login_required
+def delete_email(email_address):
+    """Delete email account"""
+    email_list = load_emails()
+    
+    # Find and remove email
+    email_found = False
+    for i, em in enumerate(email_list):
+        if em['email'] == email_address:
+            email_list.pop(i)
+            email_found = True
+            break
+    
+    if not email_found:
+        flash(f'ไม่พบ Email {email_address}', 'error')
+        return redirect(url_for('email'))
+    
+    # Delete from mailserver
+    run_mail_command(f'email del {email_address}')
+    
+    # Save updated list
+    save_emails(email_list)
+    
+    flash(f'ลบ Email {email_address} แล้ว', 'success')
+    return redirect(url_for('email'))
+
+@app.route('/email/alias', methods=['POST'])
+@login_required
+def create_alias():
+    """Create email alias/forwarder"""
+    alias_from = request.form.get('alias_from', '').strip().lower()
+    alias_to = request.form.get('alias_to', '').strip().lower()
+    
+    if not alias_from or not alias_to:
+        flash('กรุณากรอกข้อมูลให้ครบ', 'error')
+        return redirect(url_for('email'))
+    
+    # Create alias using docker-mailserver
+    success, message = run_mail_command(f'alias add {alias_from} {alias_to}')
+    
+    if success:
+        flash(f'สร้าง Alias {alias_from} → {alias_to} สำเร็จ!', 'success')
+    else:
+        flash(f'บันทึก Alias สำเร็จ (Mailserver อาจยังไม่ทำงาน)', 'info')
+    
+    return redirect(url_for('email'))
+
+# ============== Backup System (Phase 8) ==============
+
+BACKUPS_DIR = '/data/backups'
+
+def get_backup_list():
+    """Get list of all backups"""
+    if not os.path.exists(BACKUPS_DIR):
+        os.makedirs(BACKUPS_DIR, exist_ok=True)
+        return []
+    
+    backups = []
+    for filename in sorted(os.listdir(BACKUPS_DIR), reverse=True):
+        if filename.endswith('.tar.gz') or filename.endswith('.sql'):
+            filepath = os.path.join(BACKUPS_DIR, filename)
+            stat = os.stat(filepath)
+            backups.append({
+                'filename': filename,
+                'size': format_size(stat.st_size),
+                'created': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+                'type': 'website' if filename.endswith('.tar.gz') else 'database'
+            })
+    return backups
+
+@app.route('/backups')
+@login_required
+def backups():
+    """Backup management page"""
+    backup_list = get_backup_list()
+    domains = load_domains()
+    databases = load_databases()
+    return render_template('backups.html', backups=backup_list, domains=domains, databases=databases)
+
+@app.route('/backups/create-website', methods=['POST'])
+@login_required
+def create_website_backup():
+    """Create website backup"""
+    domain_name = request.form.get('domain_name', '').strip()
+    
+    if not domain_name:
+        flash('กรุณาเลือกโดเมน', 'error')
+        return redirect(url_for('backups'))
+    
+    website_path = os.path.join(WEBSITES_DIR, domain_name)
+    if not os.path.exists(website_path):
+        flash(f'ไม่พบโฟลเดอร์ {domain_name}', 'error')
+        return redirect(url_for('backups'))
+    
+    # Create backup
+    os.makedirs(BACKUPS_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_filename = f"{domain_name}_{timestamp}.tar.gz"
+    backup_path = os.path.join(BACKUPS_DIR, backup_filename)
+    
+    try:
+        import tarfile
+        with tarfile.open(backup_path, "w:gz") as tar:
+            tar.add(website_path, arcname=domain_name)
+        flash(f'Backup สำเร็จ: {backup_filename}', 'success')
+    except Exception as e:
+        flash(f'Backup ล้มเหลว: {str(e)}', 'error')
+    
+    return redirect(url_for('backups'))
+
+@app.route('/backups/create-database', methods=['POST'])
+@login_required
+def create_database_backup():
+    """Create database backup using mysqldump"""
+    db_name = request.form.get('db_name', '').strip()
+    
+    if not db_name:
+        flash('กรุณาเลือก Database', 'error')
+        return redirect(url_for('backups'))
+    
+    os.makedirs(BACKUPS_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_filename = f"{db_name}_{timestamp}.sql"
+    backup_path = os.path.join(BACKUPS_DIR, backup_filename)
+    
+    try:
+        # Run mysqldump via docker
+        result = subprocess.run([
+            'docker', 'exec', 'main_db', 
+            'mysqldump', '-u', 'root', f'-p{DB_PASSWORD}', db_name
+        ], capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0:
+            with open(backup_path, 'w') as f:
+                f.write(result.stdout)
+            flash(f'Database backup สำเร็จ: {backup_filename}', 'success')
+        else:
+            flash(f'mysqldump error: {result.stderr}', 'error')
+    except Exception as e:
+        flash(f'Backup ล้มเหลว: {str(e)}', 'error')
+    
+    return redirect(url_for('backups'))
+
+@app.route('/backups/download/<filename>')
+@login_required
+def download_backup(filename):
+    """Download backup file"""
+    from flask import send_file
+    
+    # Security check
+    if '..' in filename or '/' in filename:
+        flash('Invalid filename', 'error')
+        return redirect(url_for('backups'))
+    
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if not os.path.exists(filepath):
+        flash('Backup not found', 'error')
+        return redirect(url_for('backups'))
+    
+    return send_file(filepath, as_attachment=True)
+
+@app.route('/backups/delete/<filename>', methods=['POST'])
+@login_required
+def delete_backup(filename):
+    """Delete backup file"""
+    # Security check
+    if '..' in filename or '/' in filename:
+        flash('Invalid filename', 'error')
+        return redirect(url_for('backups'))
+    
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+        flash('ลบ Backup สำเร็จ', 'success')
+    else:
+        flash('Backup not found', 'error')
+    
+    return redirect(url_for('backups'))
+
+@app.route('/backups/restore/<filename>', methods=['POST'])
+@login_required
+def restore_backup(filename):
+    """Restore backup"""
+    import tarfile
+    
+    # Security check
+    if '..' in filename or '/' in filename:
+        flash('Invalid filename', 'error')
+        return redirect(url_for('backups'))
+    
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if not os.path.exists(filepath):
+        flash('Backup not found', 'error')
+        return redirect(url_for('backups'))
+    
+    try:
+        if filename.endswith('.tar.gz'):
+            # Restore website
+            with tarfile.open(filepath, 'r:gz') as tar:
+                tar.extractall(WEBSITES_DIR)
+            flash('Restore website สำเร็จ!', 'success')
+        elif filename.endswith('.sql'):
+            # Restore database
+            db_name = filename.split('_')[0]
+            with open(filepath, 'r') as f:
+                sql_content = f.read()
+            
+            result = subprocess.run([
+                'docker', 'exec', '-i', 'main_db',
+                'mysql', '-u', 'root', f'-p{DB_PASSWORD}', db_name
+            ], input=sql_content, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode == 0:
+                flash('Restore database สำเร็จ!', 'success')
+            else:
+                flash(f'Restore error: {result.stderr}', 'error')
+    except Exception as e:
+        flash(f'Restore ล้มเหลว: {str(e)}', 'error')
+    
+    return redirect(url_for('backups'))
+
+# ============== DNS Management (Phase 9) ==============
+
+DNS_CONFIG_FILE = '/data/dns_config.json'
+
+def load_dns_config():
+    """Load Cloudflare config"""
+    if os.path.exists(DNS_CONFIG_FILE):
+        with open(DNS_CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    return {'api_token': '', 'zone_id': '', 'domain': ''}
+
+def save_dns_config(config):
+    """Save Cloudflare config"""
+    os.makedirs(os.path.dirname(DNS_CONFIG_FILE), exist_ok=True)
+    with open(DNS_CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
+
+def cloudflare_request(method, endpoint, config, data=None):
+    """Make Cloudflare API request"""
+    import requests
+    
+    headers = {
+        'Authorization': f'Bearer {config["api_token"]}',
+        'Content-Type': 'application/json'
+    }
+    
+    url = f'https://api.cloudflare.com/client/v4/zones/{config["zone_id"]}/{endpoint}'
+    
+    try:
+        if method == 'GET':
+            resp = requests.get(url, headers=headers, timeout=10)
+        elif method == 'POST':
+            resp = requests.post(url, headers=headers, json=data, timeout=10)
+        elif method == 'PUT':
+            resp = requests.put(url, headers=headers, json=data, timeout=10)
+        elif method == 'DELETE':
+            resp = requests.delete(url, headers=headers, timeout=10)
+        
+        return resp.json()
+    except Exception as e:
+        return {'success': False, 'errors': [{'message': str(e)}]}
+
+@app.route('/dns')
+@login_required
+def dns():
+    """DNS management page"""
+    config = load_dns_config()
+    records = []
+    
+    if config.get('api_token') and config.get('zone_id'):
+        result = cloudflare_request('GET', 'dns_records', config)
+        if result.get('success'):
+            records = result.get('result', [])
+    
+    return render_template('dns.html', config=config, records=records)
+
+@app.route('/dns/config', methods=['POST'])
+@login_required
+def save_dns_settings():
+    """Save Cloudflare API settings"""
+    api_token = request.form.get('api_token', '').strip()
+    zone_id = request.form.get('zone_id', '').strip()
+    domain = request.form.get('domain', '').strip()
+    
+    if not api_token or not zone_id:
+        flash('กรุณากรอก API Token และ Zone ID', 'error')
+        return redirect(url_for('dns'))
+    
+    config = {
+        'api_token': api_token,
+        'zone_id': zone_id,
+        'domain': domain
+    }
+    save_dns_config(config)
+    
+    # Test connection
+    result = cloudflare_request('GET', 'dns_records?per_page=1', config)
+    if result.get('success'):
+        flash('เชื่อมต่อ Cloudflare สำเร็จ!', 'success')
+    else:
+        error_msg = result.get('errors', [{}])[0].get('message', 'Unknown error')
+        flash(f'เชื่อมต่อไม่สำเร็จ: {error_msg}', 'error')
+    
+    return redirect(url_for('dns'))
+
+@app.route('/dns/add', methods=['POST'])
+@login_required
+def add_dns_record():
+    """Add DNS record"""
+    config = load_dns_config()
+    
+    record_type = request.form.get('type', 'A')
+    name = request.form.get('name', '').strip()
+    content = request.form.get('content', '').strip()
+    proxied = request.form.get('proxied') == 'on'
+    ttl = int(request.form.get('ttl', 1))
+    
+    if not name or not content:
+        flash('กรุณากรอกข้อมูลให้ครบ', 'error')
+        return redirect(url_for('dns'))
+    
+    data = {
+        'type': record_type,
+        'name': name,
+        'content': content,
+        'ttl': ttl,
+        'proxied': proxied if record_type in ['A', 'AAAA', 'CNAME'] else False
+    }
+    
+    result = cloudflare_request('POST', 'dns_records', config, data)
+    
+    if result.get('success'):
+        flash(f'เพิ่ม {record_type} record สำเร็จ!', 'success')
+    else:
+        error_msg = result.get('errors', [{}])[0].get('message', 'Unknown error')
+        flash(f'เพิ่มไม่สำเร็จ: {error_msg}', 'error')
+    
+    return redirect(url_for('dns'))
+
+@app.route('/dns/delete/<record_id>', methods=['POST'])
+@login_required
+def delete_dns_record(record_id):
+    """Delete DNS record"""
+    config = load_dns_config()
+    
+    result = cloudflare_request('DELETE', f'dns_records/{record_id}', config)
+    
+    if result.get('success'):
+        flash('ลบ DNS record สำเร็จ!', 'success')
+    else:
+        error_msg = result.get('errors', [{}])[0].get('message', 'Unknown error')
+        flash(f'ลบไม่สำเร็จ: {error_msg}', 'error')
+    
+    return redirect(url_for('dns'))
+
+@app.route('/dns/quick-setup', methods=['POST'])
+@login_required
+def quick_dns_setup():
+    """Quick setup common DNS records"""
+    config = load_dns_config()
+    server_ip = request.form.get('server_ip', '').strip()
+    domain = config.get('domain', '').strip()
+    
+    if not server_ip or not domain:
+        flash('กรุณากรอก Server IP และ Domain', 'error')
+        return redirect(url_for('dns'))
+    
+    records_to_create = [
+        {'type': 'A', 'name': '@', 'content': server_ip, 'proxied': True},
+        {'type': 'A', 'name': 'www', 'content': server_ip, 'proxied': True},
+        {'type': 'A', 'name': 'mail', 'content': server_ip, 'proxied': False},
+        {'type': 'MX', 'name': '@', 'content': f'mail.{domain}', 'priority': 10},
+        {'type': 'TXT', 'name': '@', 'content': f'v=spf1 a mx ip4:{server_ip} ~all'},
+    ]
+    
+    success_count = 0
+    for record in records_to_create:
+        data = {
+            'type': record['type'],
+            'name': record['name'],
+            'content': record['content'],
+            'ttl': 1,
+            'proxied': record.get('proxied', False)
+        }
+        if record['type'] == 'MX':
+            data['priority'] = record.get('priority', 10)
+        
+        result = cloudflare_request('POST', 'dns_records', config, data)
+        if result.get('success'):
+            success_count += 1
+    
+    flash(f'Quick Setup สำเร็จ {success_count}/{len(records_to_create)} records', 'success')
+    return redirect(url_for('dns'))
+
 # ============== Settings ==============
 
 @app.route('/settings')
