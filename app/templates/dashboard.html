@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SJ Panel{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <h1 class="page-title">Dashboard</h1>
+    <div class="user-menu">
+        <span class="text-muted">สวัสดี, {{ current_user.username }}</span>
+        <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
+    </div>
+</div>
+
+<!-- Server Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center mb-3">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                    <i class="bi bi-cpu"></i>
+                </div>
+                <div class="ms-3">
+                    <div class="stat-label">CPU Usage</div>
+                    <div class="stat-value">{{ stats.cpu_percent }}%</div>
+                </div>
+            </div>
+            <div class="progress">
+                <div class="progress-bar bg-primary" style="width: {{ stats.cpu_percent }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center mb-3">
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-memory"></i>
+                </div>
+                <div class="ms-3">
+                    <div class="stat-label">Memory</div>
+                    <div class="stat-value">{{ stats.memory.percent }}%</div>
+                </div>
+            </div>
+            <div class="progress">
+                <div class="progress-bar bg-success" style="width: {{ stats.memory.percent }}%"></div>
+            </div>
+            <small class="text-muted">{{ (stats.memory.used / 1024 / 1024 / 1024)|round(1) }} GB / {{
+                (stats.memory.total / 1024 / 1024 / 1024)|round(1) }} GB</small>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center mb-3">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                    <i class="bi bi-hdd"></i>
+                </div>
+                <div class="ms-3">
+                    <div class="stat-label">Disk</div>
+                    <div class="stat-value">{{ stats.disk.percent }}%</div>
+                </div>
+            </div>
+            <div class="progress">
+                <div class="progress-bar bg-warning" style="width: {{ stats.disk.percent }}%"></div>
+            </div>
+            <small class="text-muted">{{ (stats.disk.used / 1024 / 1024 / 1024)|round(1) }} GB / {{ (stats.disk.total /
+                1024 / 1024 / 1024)|round(1) }} GB</small>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center mb-3">
+                <div class="stat-icon bg-info bg-opacity-10 text-info">
+                    <i class="bi bi-pc-display"></i>
+                </div>
+                <div class="ms-3">
+                    <div class="stat-label">Hostname</div>
+                    <div class="stat-value" style="font-size: 1rem;">{{ stats.hostname }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-globe me-2"></i> Quick Actions</span>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('add_domain') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle me-2"></i> Add New Domain
+                    </a>
+                    <a href="{{ url_for('databases') }}" class="btn btn-outline-success">
+                        <i class="bi bi-database-add me-2"></i> Create Database
+                    </a>
+                    <a href="{{ url_for('files') }}" class="btn btn-outline-info">
+                        <i class="bi bi-folder-plus me-2"></i> File Manager
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i> System Info
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td class="text-muted">Panel Version</td>
+                        <td><strong>SJ Panel v1.0</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">PHP Version</td>
+                        <td>8.2</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">MariaDB</td>
+                        <td>LTS</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Nginx</td>
+                        <td>Latest</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

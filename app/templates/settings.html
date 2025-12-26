@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - SJ Panel{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <h1 class="page-title"><i class="bi bi-gear me-2"></i> Settings</h1>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person me-2"></i> Change Password
+            </div>
+            <div class="card-body">
+                <form method="POST" action="#">
+                    <div class="mb-3">
+                        <label class="form-label">Current Password</label>
+                        <input type="password" class="form-control" name="current_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password</label>
+                        <input type="password" class="form-control" name="new_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" name="confirm_password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check me-2"></i> Update Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i> System Information
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td class="text-muted">Panel Version</td>
+                        <td><strong>SJ Panel v1.0</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Python</td>
+                        <td>3.11</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Flask</td>
+                        <td>3.0</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Docker</td>
+                        <td>Enabled</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle me-2"></i> Danger Zone
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">การดำเนินการเหล่านี้ไม่สามารถย้อนกลับได้</p>
+                <button class="btn btn-outline-danger" disabled>
+                    <i class="bi bi-trash me-2"></i> Reset All Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

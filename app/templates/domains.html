@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Domains - SJ Panel{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <h1 class="page-title"><i class="bi bi-globe me-2"></i> Domains</h1>
+    <a href="{{ url_for('add_domain') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2"></i> Add Domain
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if domains %}
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>SSL</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for domain in domains %}
+                <tr>
+                    <td>
+                        <strong>{{ domain.name }}</strong><br>
+                        <small class="text-muted">{{ domain.path }}</small>
+                    </td>
+                    <td><span class="badge bg-success">Active</span></td>
+                    <td>
+                        {% if domain.ssl %}
+                        <span class="badge bg-success"><i class="bi bi-lock"></i> Enabled</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ domain.created }}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="#" class="btn btn-outline-primary"><i class="bi bi-folder"></i></a>
+                            <a href="#" class="btn btn-outline-success"><i class="bi bi-shield-lock"></i></a>
+                            <a href="#" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-globe text-muted" style="font-size: 4rem;"></i>
+            <h5 class="mt-3 text-muted">ยังไม่มีโดเมน</h5>
+            <p class="text-muted">คลิกปุ่ม "Add Domain" เพื่อเพิ่มโดเมนแรกของคุณ</p>
+            <a href="{{ url_for('add_domain') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i> Add Domain
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
