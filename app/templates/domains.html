@@ -41,9 +41,14 @@
                     <td>{{ domain.created }}</td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <a href="#" class="btn btn-outline-primary"><i class="bi bi-folder"></i></a>
-                            <a href="#" class="btn btn-outline-success"><i class="bi bi-shield-lock"></i></a>
-                            <a href="#" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                            <a href="{{ url_for('files') }}" class="btn btn-outline-primary" title="Files"><i
+                                    class="bi bi-folder"></i></a>
+                            <form action="{{ url_for('delete_domain', domain_name=domain.name) }}" method="POST"
+                                style="display:inline;"
+                                onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโดเมน {{ domain.name }}?');">
+                                <button type="submit" class="btn btn-outline-danger" title="Delete"><i
+                                        class="bi bi-trash"></i></button>
+                            </form>
                         </div>
                     </td>
                 </tr>
