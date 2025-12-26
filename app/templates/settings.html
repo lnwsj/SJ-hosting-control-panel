@@ -14,7 +14,7 @@
                 <i class="bi bi-person me-2"></i> Change Password
             </div>
             <div class="card-body">
-                <form method="POST" action="#">
+                <form method="POST" action="{{ url_for('change_password') }}">
                     <div class="mb-3">
                         <label class="form-label">Current Password</label>
                         <input type="password" class="form-control" name="current_password" required>
@@ -59,6 +59,24 @@
                         <td>Enabled</td>
                     </tr>
                 </table>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-shield-lock me-2"></i> SSL Certificates
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">จัดการ SSL certificates ของทุกโดเมน</p>
+                <form action="{{ url_for('renew_all_ssl') }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-arrow-repeat me-2"></i> Renew All Certificates
+                    </button>
+                </form>
+                <p class="mt-3 mb-0"><small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i> Let's Encrypt certificates จะหมดอายุทุก 90 วัน
+                        แนะนำให้ต่ออายุทุกเดือน
+                    </small></p>
             </div>
         </div>
 

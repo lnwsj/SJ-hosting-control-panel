@@ -344,6 +344,92 @@ def delete_domain(domain_name):
     
     return redirect(url_for('domains'))
 
+# ============== SSL Management (Phase 5) ==============
+
+def enable_ssl_for_domain(domain_name):
+    """Enable SSL using Certbot"""
+    try:
+        # Run certbot to obtain certificate
+        result = subprocess.run([
+            'certbot', '--nginx',
+            '-d', domain_name,
+            '-d', f'www.{domain_name}',
+            '--non-interactive',
+            '--agree-tos',
+            '--email', 'admin@' + domain_name,
+            '--redirect'
+        ], capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0:
+            return True, "SSL certificate installed successfully"
+        else:
+            return False, result.stderr or "Certbot failed"
+    except subprocess.TimeoutExpired:
+        return False, "Certbot timed out"
+    except FileNotFoundError:
+        return False, "Certbot not installed"
+    except Exception as e:
+        return False, str(e)
+
+def check_ssl_status(domain_name):
+    """Check if domain has valid SSL certificate"""
+    cert_path = f'/etc/letsencrypt/live/{domain_name}/fullchain.pem'
+    return os.path.exists(cert_path)
+
+@app.route('/domains/ssl/<domain_name>', methods=['POST'])
+@login_required
+def toggle_ssl(domain_name):
+    """Enable SSL for a domain"""
+    domains_list = load_domains()
+    
+    # Find domain
+    domain_info = None
+    for domain in domains_list:
+        if domain['name'] == domain_name:
+            domain_info = domain
+            break
+    
+    if not domain_info:
+        flash(f'ไม่พบโดเมน {domain_name}', 'error')
+        return redirect(url_for('domains'))
+    
+    if domain_info.get('ssl', False):
+        flash(f'โดเมน {domain_name} มี SSL อยู่แล้ว', 'info')
+        return redirect(url_for('domains'))
+    
+    # Try to enable SSL
+    success, message = enable_ssl_for_domain(domain_name)
+    
+    if success:
+        # Update domain SSL status
+        domain_info['ssl'] = True
+        save_domains(domains_list)
+        flash(f'เปิดใช้งาน SSL สำหรับ {domain_name} สำเร็จ!', 'success')
+    else:
+        flash(f'ไม่สามารถเปิด SSL ได้: {message}', 'error')
+    
+    return redirect(url_for('domains'))
+
+@app.route('/ssl/renew', methods=['POST'])
+@login_required
+def renew_all_ssl():
+    """Renew all SSL certificates"""
+    try:
+        result = subprocess.run(
+            ['certbot', 'renew', '--quiet'],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode == 0:
+            flash('ต่ออายุ SSL certificates สำเร็จ!', 'success')
+        else:
+            flash(f'เกิดข้อผิดพลาด: {result.stderr}', 'error')
+    except FileNotFoundError:
+        flash('Certbot ยังไม่ได้ติดตั้ง', 'error')
+    except Exception as e:
+        flash(f'เกิดข้อผิดพลาด: {str(e)}', 'error')
+    
+    return redirect(url_for('settings'))
+
 # ============== Database Management (Phase 3) ==============
 
 # Database configuration
@@ -712,6 +798,69 @@ def download_file(filepath):
 def settings():
     """Settings page"""
     return render_template('settings.html')
+
+@app.route('/settings/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change user password"""
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
+    
+    # Validation
+    if not current_password or not new_password or not confirm_password:
+        flash('กรุณากรอกข้อมูลให้ครบ', 'error')
+        return redirect(url_for('settings'))
+    
+    if new_password != confirm_password:
+        flash('รหัสผ่านใหม่ไม่ตรงกัน', 'error')
+        return redirect(url_for('settings'))
+    
+    if len(new_password) < 6:
+        flash('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร', 'error')
+        return redirect(url_for('settings'))
+    
+    # Verify current password
+    users = load_users()
+    username = current_user.username
+    
+    if username not in users:
+        flash('ผู้ใช้ไม่ถูกต้อง', 'error')
+        return redirect(url_for('settings'))
+    
+    if not check_password_hash(users[username]['password'], current_password):
+        flash('รหัสผ่านปัจจุบันไม่ถูกต้อง', 'error')
+        return redirect(url_for('settings'))
+    
+    # Update password
+    users[username]['password'] = generate_password_hash(new_password)
+    save_users(users)
+    
+    flash('เปลี่ยนรหัสผ่านสำเร็จ!', 'success')
+    return redirect(url_for('settings'))
+
+# ============== Error Handlers ==============
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """Handle 404 errors"""
+    return render_template('error.html', 
+                         error_code=404, 
+                         error_message='ไม่พบหน้าที่ต้องการ'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    return render_template('error.html', 
+                         error_code=500, 
+                         error_message='เกิดข้อผิดพลาดภายในระบบ'), 500
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    """Handle 403 errors"""
+    return render_template('error.html', 
+                         error_code=403, 
+                         error_message='ไม่มีสิทธิ์เข้าถึง'), 403
 
 if __name__ == '__main__':
     # Ensure data directory exists

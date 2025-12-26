@@ -41,13 +41,29 @@
                     <td>{{ domain.created }}</td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <a href="{{ url_for('files') }}" class="btn btn-outline-primary" title="Files"><i
-                                    class="bi bi-folder"></i></a>
+                            <a href="{{ url_for('files', subpath=domain.name) }}" class="btn btn-outline-primary"
+                                title="Files">
+                                <i class="bi bi-folder"></i>
+                            </a>
+                            {% if not domain.ssl %}
+                            <form action="{{ url_for('toggle_ssl', domain_name=domain.name) }}" method="POST"
+                                style="display:inline;"
+                                onsubmit="return confirm('เปิดใช้งาน SSL สำหรับ {{ domain.name }}? (ต้องมี DNS ชี้มาที่ Server นี้แล้ว)');">
+                                <button type="submit" class="btn btn-outline-success" title="Enable SSL">
+                                    <i class="bi bi-shield-lock"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <button class="btn btn-success" title="SSL Enabled" disabled>
+                                <i class="bi bi-shield-lock-fill"></i>
+                            </button>
+                            {% endif %}
                             <form action="{{ url_for('delete_domain', domain_name=domain.name) }}" method="POST"
                                 style="display:inline;"
                                 onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโดเมน {{ domain.name }}?');">
-                                <button type="submit" class="btn btn-outline-danger" title="Delete"><i
-                                        class="bi bi-trash"></i></button>
+                                <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </form>
                         </div>
                     </td>

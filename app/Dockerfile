@@ -6,6 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     nginx \
     curl \
+    certbot \
+    python3-certbot-nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
