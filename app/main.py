@@ -346,22 +346,364 @@ def delete_domain(domain_name):
 
 # ============== Database Management (Phase 3) ==============
 
+# Database configuration
+DB_HOST = os.environ.get('DB_HOST', 'mariadb')
+DB_USER = os.environ.get('DB_USER', 'root')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', 'SjHosting2025!')
+DATABASES_FILE = '/data/databases.json'
+
+def get_db_connection():
+    """Get MySQL connection"""
+    import pymysql
+    return pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+def load_databases():
+    """Load databases list from file"""
+    if os.path.exists(DATABASES_FILE):
+        with open(DATABASES_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_databases(databases):
+    """Save databases list to file"""
+    os.makedirs(os.path.dirname(DATABASES_FILE), exist_ok=True)
+    with open(DATABASES_FILE, 'w') as f:
+        json.dump(databases, f, indent=2)
+
+def create_mysql_database(db_name, db_user, db_password):
+    """Create MySQL database and user"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Create database
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            
+            # Create user
+            cursor.execute(f"CREATE USER IF NOT EXISTS '{db_user}'@'%%' IDENTIFIED BY '{db_password}'")
+            
+            # Grant privileges
+            cursor.execute(f"GRANT ALL PRIVILEGES ON `{db_name}`.* TO '{db_user}'@'%%'")
+            
+            # Flush privileges
+            cursor.execute("FLUSH PRIVILEGES")
+            
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error creating database: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def delete_mysql_database(db_name, db_user):
+    """Delete MySQL database and user"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Drop database
+            cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+            
+            # Drop user
+            cursor.execute(f"DROP USER IF EXISTS '{db_user}'@'%%'")
+            
+            # Flush privileges
+            cursor.execute("FLUSH PRIVILEGES")
+            
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error deleting database: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def generate_password(length=16):
+    """Generate a random password"""
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
 @app.route('/databases')
 @login_required
 def databases():
     """List all databases"""
-    # TODO: Load from MySQL
-    db_list = []
+    db_list = load_databases()
     return render_template('databases.html', databases=db_list)
+
+@app.route('/databases/create', methods=['POST'])
+@login_required
+def create_database():
+    """Create a new database"""
+    db_name = request.form.get('db_name', '').strip().lower()
+    db_user = request.form.get('db_user', '').strip().lower()
+    db_password = request.form.get('db_pass', '').strip()
+    
+    # Validation
+    if not db_name or not db_user:
+        flash('กรุณากรอกข้อมูลให้ครบ', 'error')
+        return redirect(url_for('databases'))
+    
+    # Validate names (alphanumeric and underscore only)
+    if not re.match(r'^[a-z0-9_]+$', db_name) or not re.match(r'^[a-z0-9_]+$', db_user):
+        flash('ชื่อ Database และ User ต้องเป็นตัวอักษรภาษาอังกฤษ, ตัวเลข หรือ _ เท่านั้น', 'error')
+        return redirect(url_for('databases'))
+    
+    # Generate password if not provided
+    if not db_password:
+        db_password = generate_password()
+    
+    # Check if database already exists
+    db_list = load_databases()
+    if any(d['name'] == db_name for d in db_list):
+        flash(f'Database {db_name} มีอยู่แล้ว', 'error')
+        return redirect(url_for('databases'))
+    
+    try:
+        # Create in MySQL
+        create_mysql_database(db_name, db_user, db_password)
+        
+        # Save to file
+        new_db = {
+            'name': db_name,
+            'user': db_user,
+            'password': db_password,
+            'created': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }
+        db_list.append(new_db)
+        save_databases(db_list)
+        
+        flash(f'Database {db_name} สร้างเรียบร้อยแล้ว! User: {db_user} / Password: {db_password}', 'success')
+    except Exception as e:
+        flash(f'เกิดข้อผิดพลาด: {str(e)}', 'error')
+    
+    return redirect(url_for('databases'))
+
+@app.route('/databases/delete/<db_name>', methods=['POST'])
+@login_required
+def delete_database(db_name):
+    """Delete a database"""
+    db_list = load_databases()
+    
+    # Find database
+    db_info = None
+    for i, db in enumerate(db_list):
+        if db['name'] == db_name:
+            db_info = db
+            db_list.pop(i)
+            break
+    
+    if not db_info:
+        flash(f'ไม่พบ Database {db_name}', 'error')
+        return redirect(url_for('databases'))
+    
+    try:
+        # Delete from MySQL
+        delete_mysql_database(db_name, db_info['user'])
+        
+        # Save updated list
+        save_databases(db_list)
+        
+        flash(f'Database {db_name} ถูกลบแล้ว', 'success')
+    except Exception as e:
+        flash(f'เกิดข้อผิดพลาด: {str(e)}', 'error')
+    
+    return redirect(url_for('databases'))
 
 # ============== File Management (Phase 4) ==============
 
+def get_safe_path(path):
+    """Validate and return safe path within WEBSITES_DIR"""
+    if not path:
+        return WEBSITES_DIR
+    
+    # Normalize and resolve the path
+    full_path = os.path.normpath(os.path.join(WEBSITES_DIR, path))
+    
+    # Security check: must be within WEBSITES_DIR
+    if not full_path.startswith(os.path.normpath(WEBSITES_DIR)):
+        return None
+    
+    return full_path
+
+def get_file_info(filepath):
+    """Get file/folder information"""
+    stat = os.stat(filepath)
+    is_dir = os.path.isdir(filepath)
+    return {
+        'name': os.path.basename(filepath),
+        'path': os.path.relpath(filepath, WEBSITES_DIR),
+        'is_dir': is_dir,
+        'size': stat.st_size if not is_dir else 0,
+        'size_human': format_size(stat.st_size) if not is_dir else '-',
+        'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
+    }
+
+def format_size(size):
+    """Format bytes to human readable"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
 @app.route('/files')
+@app.route('/files/<path:subpath>')
 @login_required
-def files():
+def files(subpath=''):
     """File browser"""
-    # TODO: Implement file browser
-    return render_template('files.html')
+    current_path = get_safe_path(subpath)
+    
+    if current_path is None or not os.path.exists(current_path):
+        flash('Path not found', 'error')
+        return redirect(url_for('files'))
+    
+    # If it's a file, return it for download
+    if os.path.isfile(current_path):
+        return send_file(current_path, as_attachment=True)
+    
+    # List directory contents
+    items = []
+    try:
+        for name in sorted(os.listdir(current_path)):
+            filepath = os.path.join(current_path, name)
+            items.append(get_file_info(filepath))
+    except PermissionError:
+        flash('Permission denied', 'error')
+    
+    # Sort: directories first, then files
+    items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+    
+    # Build breadcrumb
+    breadcrumb = []
+    if subpath:
+        parts = subpath.split('/')
+        for i, part in enumerate(parts):
+            breadcrumb.append({
+                'name': part,
+                'path': '/'.join(parts[:i+1])
+            })
+    
+    return render_template('files.html', 
+                         items=items, 
+                         current_path=subpath,
+                         breadcrumb=breadcrumb)
+
+@app.route('/files/upload', methods=['POST'])
+@login_required
+def upload_file():
+    """Upload file"""
+    current_path = request.form.get('current_path', '')
+    target_dir = get_safe_path(current_path)
+    
+    if target_dir is None or not os.path.isdir(target_dir):
+        flash('Invalid upload path', 'error')
+        return redirect(url_for('files'))
+    
+    if 'file' not in request.files:
+        flash('No file selected', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    # Secure the filename
+    from werkzeug.utils import secure_filename
+    filename = secure_filename(file.filename)
+    if not filename:
+        flash('Invalid filename', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    try:
+        filepath = os.path.join(target_dir, filename)
+        file.save(filepath)
+        flash(f'อัปโหลด {filename} สำเร็จ!', 'success')
+    except Exception as e:
+        flash(f'Upload error: {str(e)}', 'error')
+    
+    return redirect(url_for('files', subpath=current_path))
+
+@app.route('/files/create-folder', methods=['POST'])
+@login_required
+def create_folder():
+    """Create new folder"""
+    current_path = request.form.get('current_path', '')
+    folder_name = request.form.get('folder_name', '').strip()
+    
+    if not folder_name or not re.match(r'^[a-zA-Z0-9_\-\.]+$', folder_name):
+        flash('ชื่อโฟลเดอร์ไม่ถูกต้อง (ใช้ตัวอักษร, ตัวเลข, _, -, . เท่านั้น)', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    target_dir = get_safe_path(current_path)
+    if target_dir is None:
+        flash('Invalid path', 'error')
+        return redirect(url_for('files'))
+    
+    new_folder = os.path.join(target_dir, folder_name)
+    
+    try:
+        os.makedirs(new_folder, exist_ok=False)
+        flash(f'สร้างโฟลเดอร์ {folder_name} สำเร็จ!', 'success')
+    except FileExistsError:
+        flash(f'โฟลเดอร์ {folder_name} มีอยู่แล้ว', 'error')
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+    
+    return redirect(url_for('files', subpath=current_path))
+
+@app.route('/files/delete', methods=['POST'])
+@login_required
+def delete_file():
+    """Delete file or folder"""
+    import shutil
+    
+    file_path = request.form.get('file_path', '')
+    current_path = request.form.get('current_path', '')
+    
+    target = get_safe_path(file_path)
+    
+    if target is None or not os.path.exists(target):
+        flash('File not found', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    # Prevent deleting root
+    if target == os.path.normpath(WEBSITES_DIR):
+        flash('Cannot delete root directory', 'error')
+        return redirect(url_for('files', subpath=current_path))
+    
+    try:
+        if os.path.isdir(target):
+            shutil.rmtree(target)
+            flash(f'ลบโฟลเดอร์สำเร็จ!', 'success')
+        else:
+            os.remove(target)
+            flash(f'ลบไฟล์สำเร็จ!', 'success')
+    except Exception as e:
+        flash(f'Delete error: {str(e)}', 'error')
+    
+    return redirect(url_for('files', subpath=current_path))
+
+@app.route('/files/download/<path:filepath>')
+@login_required
+def download_file(filepath):
+    """Download file"""
+    from flask import send_file
+    
+    target = get_safe_path(filepath)
+    
+    if target is None or not os.path.isfile(target):
+        flash('File not found', 'error')
+        return redirect(url_for('files'))
+    
+    return send_file(target, as_attachment=True)
 
 # ============== Settings ==============
 

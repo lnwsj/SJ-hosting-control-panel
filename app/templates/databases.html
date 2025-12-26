@@ -23,6 +23,8 @@
                 <tr>
                     <th>Database Name</th>
                     <th>User</th>
+                    <th>Password</th>
+                    <th>Created</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -32,12 +34,35 @@
                     <td><strong>{{ db.name }}</strong></td>
                     <td><code>{{ db.user }}</code></td>
                     <td>
-                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        <code class="password-hidden" data-password="{{ db.password }}">••••••••</code>
+                        <button class="btn btn-sm btn-link p-0 ms-2" onclick="togglePassword(this)"><i
+                                class="bi bi-eye"></i></button>
+                    </td>
+                    <td><small class="text-muted">{{ db.created }}</small></td>
+                    <td>
+                        <form action="{{ url_for('delete_database', db_name=db.name) }}" method="POST"
+                            style="display:inline;"
+                            onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบ Database {{ db.name }}?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i
+                                    class="bi bi-trash"></i></button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <script>
+            function togglePassword(btn) {
+                const code = btn.previousElementSibling;
+                if (code.textContent === '••••••••') {
+                    code.textContent = code.dataset.password;
+                    btn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                } else {
+                    code.textContent = '••••••••';
+                    btn.innerHTML = '<i class="bi bi-eye"></i>';
+                }
+            }
+        </script>
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-database text-muted" style="font-size: 4rem;"></i>
@@ -59,24 +84,28 @@
                 <h5 class="modal-title"><i class="bi bi-database-add me-2"></i> Create Database</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="#">
+            <form method="POST" action="{{ url_for('create_database') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Database Name</label>
-                        <input type="text" class="form-control" name="db_name" required>
+                        <input type="text" class="form-control" name="db_name" placeholder="my_database" required
+                            pattern="[a-z0-9_]+">
+                        <div class="form-text">ใช้ตัวอักษรพิมพ์เล็ก, ตัวเลข หรือ _ เท่านั้น</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Username</label>
-                        <input type="text" class="form-control" name="db_user" required>
+                        <input type="text" class="form-control" name="db_user" placeholder="my_user" required
+                            pattern="[a-z0-9_]+">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-control" name="db_pass" required>
+                        <label class="form-label">Password <small
+                                class="text-muted">(เว้นว่างเพื่อสร้างอัตโนมัติ)</small></label>
+                        <input type="text" class="form-control" name="db_pass" placeholder="auto-generated">
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle me-2"></i>Create</button>
                 </div>
             </form>
         </div>
@@ -85,14 +114,19 @@
 
 <!-- phpMyAdmin Modal -->
 <div class="modal fade" id="pmaModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">phpMyAdmin</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
-                <iframe src="http://localhost:8081" style="width:100%; height:500px; border:none;"></iframe>
+                <div class="alert alert-info m-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>phpMyAdmin</strong> เปิดที่ <a href="http://{{ request.host.split(':')[0] }}:8081"
+                        target="_blank">http://{{ request.host.split(':')[0] }}:8081</a>
+                    <br>Login: <code>root</code> / <code>SjHosting2025!</code>
+                </div>
             </div>
         </div>
     </div>

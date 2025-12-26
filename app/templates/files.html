@@ -4,20 +4,158 @@
 
 {% block content %}
 <div class="top-bar">
-    <h1 class="page-title"><i class="bi bi-folder me-2"></i> File Manager</h1>
+    <div>
+        <h1 class="page-title"><i class="bi bi-folder me-2"></i> File Manager</h1>
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mt-2">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('files') }}"><i class="bi bi-house"></i> /var/www</a>
+                </li>
+                {% for crumb in breadcrumb %}
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('files', subpath=crumb.path) }}">{{ crumb.name }}</a>
+                </li>
+                {% endfor %}
+            </ol>
+        </nav>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+            <i class="bi bi-upload me-2"></i> Upload
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newFolderModal">
+            <i class="bi bi-folder-plus me-2"></i> New Folder
+        </button>
+    </div>
 </div>
 
 <div class="card">
-    <div class="card-body text-center py-5">
-        <i class="bi bi-folder-fill text-warning" style="font-size: 4rem;"></i>
-        <h5 class="mt-3">File Manager</h5>
-        <p class="text-muted">ฟีเจอร์นี้จะถูกเพิ่มใน Phase 4</p>
-        <hr>
-        <p>ในตอนนี้คุณสามารถใช้ <strong>SFTP</strong> เพื่อจัดการไฟล์ได้:</p>
-        <div class="bg-light p-3 rounded d-inline-block">
-            <code>Host: YOUR_SERVER_IP</code><br>
-            <code>User: root</code><br>
-            <code>Port: 22</code>
+    <div class="card-body p-0">
+        {% if items %}
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;"></th>
+                    <th>Name</th>
+                    <th style="width: 100px;">Size</th>
+                    <th style="width: 150px;">Modified</th>
+                    <th style="width: 120px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="text-center">
+                        {% if item.is_dir %}
+                        <i class="bi bi-folder-fill text-warning" style="font-size: 1.3rem;"></i>
+                        {% else %}
+                        {% set ext = item.name.split('.')[-1].lower() %}
+                        {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'] %}
+                        <i class="bi bi-file-image text-success" style="font-size: 1.3rem;"></i>
+                        {% elif ext in ['php', 'py', 'js', 'html', 'css', 'json'] %}
+                        <i class="bi bi-file-code text-primary" style="font-size: 1.3rem;"></i>
+                        {% elif ext in ['zip', 'gz', 'tar', 'rar'] %}
+                        <i class="bi bi-file-zip text-warning" style="font-size: 1.3rem;"></i>
+                        {% else %}
+                        <i class="bi bi-file-earmark text-secondary" style="font-size: 1.3rem;"></i>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.is_dir %}
+                        <a href="{{ url_for('files', subpath=item.path) }}" class="text-decoration-none fw-semibold">
+                            {{ item.name }}
+                        </a>
+                        {% else %}
+                        <span>{{ item.name }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted"><small>{{ item.size_human }}</small></td>
+                    <td class="text-muted"><small>{{ item.modified }}</small></td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            {% if not item.is_dir %}
+                            <a href="{{ url_for('download_file', filepath=item.path) }}" class="btn btn-outline-primary"
+                                title="Download">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+                            <form action="{{ url_for('delete_file') }}" method="POST" style="display:inline;"
+                                onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบ {{ item.name }}?');">
+                                <input type="hidden" name="file_path" value="{{ item.path }}">
+                                <input type="hidden" name="current_path" value="{{ current_path }}">
+                                <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-folder text-muted" style="font-size: 4rem;"></i>
+            <h5 class="mt-3 text-muted">โฟลเดอร์ว่าง</h5>
+            <p class="text-muted">อัปโหลดไฟล์หรือสร้างโฟลเดอร์ใหม่เพื่อเริ่มต้น</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-upload me-2"></i> Upload File</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="current_path" value="{{ current_path }}">
+                    <div class="mb-3">
+                        <label class="form-label">Select File</label>
+                        <input type="file" class="form-control" name="file" required>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        ไฟล์จะถูกอัปโหลดไปที่: <code>/var/www/{{ current_path if current_path else '' }}</code>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-2"></i>Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- New Folder Modal -->
+<div class="modal fade" id="newFolderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i> New Folder</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('create_folder') }}">
+                <div class="modal-body">
+                    <input type="hidden" name="current_path" value="{{ current_path }}">
+                    <div class="mb-3">
+                        <label class="form-label">Folder Name</label>
+                        <input type="text" class="form-control" name="folder_name" required pattern="[a-zA-Z0-9_\-\.]+">
+                        <div class="form-text">ใช้ตัวอักษร, ตัวเลข, _, -, . เท่านั้น</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-folder-plus me-2"></i>Create</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
